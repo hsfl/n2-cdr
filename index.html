@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neutron-2 CDR verification dashboard</title>
+<style>
+:root{
+  --bg:#F2F5F7; --surface:#FFFFFF; --ink:#12202B; --muted:#566774; --line:#D5DEE4;
+  --pass:#17724F; --pass-tint:#E1F2EA; --fail:#B3302E; --fail-tint:#F9E4E2;
+  --accent:#1D5E8A; --warn:#946200; --track:#E6ECF0; --proc:#8FA3B3;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0E161C; --surface:#15212A; --ink:#E6EDF2; --muted:#9BABB7; --line:#26343F;
+    --pass:#52C79A; --pass-tint:#12352A; --fail:#FF8F86; --fail-tint:#3B1E1D;
+    --accent:#6CB4E4; --warn:#E3B04B; --track:#22303A; --proc:#5F7586;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.5 "Avenir Next","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  font-variant-numeric:tabular-nums}
+main{max-width:760px;margin:0 auto;padding:20px 16px 64px}
+h1{font-size:1.55rem;line-height:1.2;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.1rem;margin:32px 0 8px;font-weight:700}
+p{margin:0 0 8px}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:16px}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* verdict */
+.verdict{font-size:1.2rem;font-weight:600;margin:14px 0 12px}
+.verdict .f{color:var(--fail)} .verdict .p{color:var(--pass)}
+.ledger{border-top:1px solid var(--line)}
+.lrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.lrow .lab{flex:0 0 4.6rem;font-size:.9rem;color:var(--muted)}
+.lrow .cells{display:flex;flex-wrap:wrap;gap:6px}
+.cell{width:34px;height:34px;border-radius:6px;border:0;padding:0;cursor:pointer;
+  font-weight:700;font-size:1rem;display:grid;place-items:center}
+.cell.pass{background:var(--pass-tint);color:var(--pass);box-shadow:inset 0 0 0 1.5px var(--pass)}
+.cell.fail{background:var(--fail);color:#fff}
+@media (prefers-color-scheme: dark){.cell.fail{color:#1b0b0a}}
+
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 4px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:.95rem;min-height:44px;cursor:pointer}
+.toggle input{width:20px;height:20px}
+.btn{background:transparent;border:1.5px solid var(--accent);color:var(--accent);border-radius:8px;
+  padding:8px 14px;min-height:44px;cursor:pointer;font-weight:600}
+.btn:hover{background:var(--track)}
+
+/* budget sections */
+details.budget{border-bottom:1px solid var(--line)}
+details.budget>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+  padding:14px 0;min-height:48px}
+details.budget>summary::-webkit-details-marker{display:none}
+summary .chev{width:10px;height:10px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);
+  transform:rotate(-45deg);transition:transform .15s;flex:0 0 auto}
+details[open]>summary .chev{transform:rotate(45deg)}
+summary .bn{font-weight:700;font-size:1.05rem;flex:1}
+summary .bs{font-size:.9rem;color:var(--muted)}
+summary .bs b.f{color:var(--fail)} summary .bs b.p{color:var(--pass)}
+.src{font-size:.82rem;color:var(--muted);margin:-4px 0 8px}
+
+.check{border-left:5px solid var(--line);padding:10px 0 12px 12px;margin:0 0 10px}
+.check.pass{border-left-color:var(--pass)}
+.check.fail{border-left-color:var(--fail)}
+.check:target{background:var(--track)}
+.ch-top{display:flex;gap:8px;align-items:flex-start}
+.chip{flex:0 0 auto;font-size:.8rem;font-weight:700;padding:2px 8px;border-radius:999px;margin-top:2px}
+.chip.pass{background:var(--pass-tint);color:var(--pass)}
+.chip.fail{background:var(--fail);color:#fff}
+@media (prefers-color-scheme: dark){.chip.fail{color:#1b0b0a}}
+.ch-title{font-weight:600;line-height:1.35}
+.vals{margin:4px 0 6px;font-size:.95rem}
+.vals .m{color:var(--muted)}
+.bar{position:relative;height:10px;background:var(--track);border-radius:5px;margin:6px 0 10px;overflow:visible}
+.bar .fill{position:absolute;top:0;bottom:0;border-radius:5px}
+.bar.pass .fill{background:var(--pass)} .bar.fail .fill{background:var(--fail)}
+.bar .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.bar .zero{position:absolute;top:0;bottom:0;width:1px;background:var(--muted)}
+.reqs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.rq{font-size:.8rem;border:1px solid var(--line);border-radius:6px;padding:1px 7px;color:var(--muted)}
+.rq b{color:var(--ink);font-weight:600}
+.note{font-size:.9rem;color:var(--muted);margin:6px 0 0;max-width:68ch}
+.where{font-size:.8rem;color:var(--muted);margin-top:4px}
+
+/* what-if */
+.whatif{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px}
+.whatif summary{cursor:pointer;font-weight:700;padding:12px 0;min-height:44px;list-style:none}
+.whatif summary::-webkit-details-marker{display:none}
+.fld{display:grid;grid-template-columns:1fr 6.5rem;gap:4px 12px;align-items:center;margin:8px 0}
+.fld label{font-size:.92rem}
+.fld small{grid-column:1 / -1;color:var(--muted);font-size:.8rem;margin-top:-2px}
+.fld input,.fld select{width:100%;min-height:44px;border:1px solid var(--line);border-radius:8px;
+  padding:6px 8px;background:var(--bg)}
+
+/* flags */
+details.flag{border-bottom:1px solid var(--line)}
+details.flag>summary{list-style:none;cursor:pointer;padding:12px 0;display:flex;gap:10px;align-items:flex-start;min-height:44px}
+details.flag>summary::-webkit-details-marker{display:none}
+details.flag .chev{margin-top:8px}
+details.flag .ft{flex:1;font-weight:600}
+details.flag .fb{padding:0 0 12px 20px;color:var(--muted);font-size:.93rem;max-width:68ch}
+.tag{font-size:.75rem;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:5px;padding:0 6px;margin-right:6px;white-space:nowrap}
+
+/* rvm */
+.rv{display:flex;align-items:center;gap:10px;margin:7px 0}
+.rv .rl{flex:0 0 5.2rem;font-size:.88rem}
+.rv .rb{flex:1;display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--track)}
+.rv .rb i{display:block;height:100%}
+.rv .rn{flex:0 0 2.4rem;text-align:right;font-size:.85rem;color:var(--muted)}
+.leg{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted);margin:6px 0 10px}
+.leg span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+footer{margin-top:36px;font-size:.84rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+footer li{margin:3px 0}
+/* arcadia trace map */
+.chip.none{background:var(--track);color:var(--muted)}
+.trace-link{background:none;border:0;padding:6px 0;margin-left:10px;color:var(--accent);font-size:.8rem;font-weight:600;cursor:pointer;min-height:32px;text-decoration:underline}
+.arcnote{font-size:.9rem;color:var(--muted);max-width:68ch;margin:0 0 10px}
+.tracebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:.92rem}
+.tracebar .btn{padding:4px 12px;min-height:36px}
+.alayer{margin:14px 0 6px}
+.alayer h3{font-size:.98rem;margin:0 0 2px;font-weight:700}
+.alayer .ph{font-weight:400;color:var(--muted);font-size:.88rem}
+.alayer .nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:8px}
+.an{display:block;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);
+  border-radius:8px;padding:9px 11px;cursor:pointer;min-height:44px}
+.an.pass{border-left-color:var(--pass)} .an.fail{border-left-color:var(--fail)}
+.an.dim{opacity:.4} .an.hl{outline:2px solid var(--accent);outline-offset:1px}
+.an-top{display:flex;gap:8px;align-items:center;margin-bottom:4px}
+.an-id{font-size:.78rem;color:var(--muted)}
+.an-name{display:block;font-weight:600;line-height:1.3}
+.an-meta{display:block;font-size:.8rem;color:var(--muted);margin-top:4px}
+.an-meta b{font-weight:700} .an-meta b.f{color:var(--fail)} .an-meta b.p{color:var(--pass)}
+.imp{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px;margin-top:14px}
+.imp summary{cursor:pointer;font-weight:700;padding:12px 0;min-height:44px;list-style:none}
+.imp summary::-webkit-details-marker{display:none}
+.imp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.imp input[type=file]{max-width:100%;min-height:44px}
+.msg{font-size:.9rem;margin:6px 0 0;max-width:68ch} .msg.err{color:var(--fail)} .msg.ok{color:var(--pass)}
+.code{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:.78rem/1.45 ui-monospace,Menlo,Consolas,monospace;
+  overflow:auto;max-height:380px;white-space:pre;tab-size:4;margin:8px 0 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Neutron-2 CDR verification dashboard</h1>
+  <div class="sub" id="sub"></div>
+
+  <div class="verdict" id="verdict" aria-live="polite"></div>
+  <div class="ledger" id="ledger" role="list"></div>
+
+  <div class="tools">
+    <label class="toggle"><input type="checkbox" id="onlyFail"> Show failing checks only</label>
+  </div>
+
+  <details class="whatif" id="whatif">
+    <summary>What-if inputs <span style="font-weight:400;color:var(--muted)">(re-evaluates every check)</span></summary>
+    <div id="inputs"></div>
+    <button class="btn" id="reset" type="button">Reset to submitted values</button>
+  </details>
+
+  <h2>Budget checks</h2>
+  <div id="budgets"></div>
+
+  <h2 id="arc">Arcadia trace map</h2>
+  <p class="arcnote" id="arcnote"></p>
+  <div id="tracebar"></div>
+  <div id="arcmap"></div>
+
+  <details class="imp" id="imp">
+    <summary>Load a Capella export <span style="font-weight:400;color:var(--muted)">(replaces the draft layers)</span></summary>
+    <p class="arcnote">Load a JSON file with the four layers and the evidence links. A Python4Capella script can write it from the model. Download the template to see the exact shape.</p>
+    <div class="row"><input type="file" id="arcfile" accept=".json,application/json" aria-label="Capella export JSON file"></div>
+    <div class="row">
+      <button class="btn" id="arctemplate" type="button">Download template JSON</button>
+      <button class="btn" id="arcreset" type="button">Use draft layers</button>
+    </div>
+    <div class="msg" id="arcmsg" aria-live="polite"></div>
+  </details>
+
+  <h2>SysML v2 export</h2>
+  <p class="arcnote">Generated from the current check values, including any what-if inputs. The export validated cleanly with the OpenSysML tool on 23 Nov 2026.</p>
+  <details class="imp" id="sysmlbox">
+    <summary>Show generated model <span id="sysmlsize" style="font-weight:400;color:var(--muted)"></span></summary>
+    <div class="row">
+      <button class="btn" id="sysmlcopy" type="button">Copy</button>
+      <button class="btn" id="sysmldl" type="button">Download .sysml</button>
+    </div>
+    <div class="msg" id="sysmlmsg" aria-live="polite"></div>
+    <pre class="code" id="sysmlout" tabindex="0"></pre>
+  </details>
+
+  <h2>Flags to review before CDR</h2>
+  <p class="sub" style="margin-bottom:4px">Cross-budget inconsistencies and mismatches between a budget and the requirement it supports.</p>
+  <div id="flags"></div>
+
+  <h2>Reviewer findings to close (resubmit by 4 Dec 2026)</h2>
+  <p class="sub" style="margin-bottom:4px">From the UNP CDR compiled feedback. Up to three deliverables can be resubmitted. None of the budget workbooks has been revised yet, so the checks above still reflect the September numbers.</p>
+  <div id="review"></div>
+
+  <h2>Requirements verification progress</h2>
+  <p class="sub" style="margin-bottom:4px">Requirements Verification Matrix v4.0 (released 16 Sep 2026), 184 requirements below Tier 1. FSW counts follow the v5.0 FSW tab draft, which retires FSW-007 (14 active, 1 retired).</p>
+  <div class="leg">
+    <span style="--c:var(--pass)">Complete</span>
+    <span style="--c:var(--accent)">In progress</span>
+    <span style="--c:var(--proc)">Procedure written</span>
+  </div>
+  <div id="rvm"></div>
+
+  <footer id="foot"></footer>
+</main>
+
+<script>
+/* ---------- Data extracted from the CDR deliverables (snapshot) ---------- */
+const D = {
+  meta:{
+    pulled:"12 Nov 2026, re-checked 23 Nov 2026. The budget workbooks and RVM v4.0 are unchanged since 18 Sep 2026",
+    files:[
+      ["N2.PM.System Budgets v2.1.xlsx","mass, link, data, storage and pointing budgets (modified 18 Sep 2026)"],
+      ["N2.PM.Power Budget v2.0.xlsx","STK-based energy balance (modified 18 Sep 2026)"],
+      ["N2.PM.Requirements Verification Matrix v4.0.xlsx","requirement status and verification method (released 16 Sep 2026)"],
+      ["RVM v5.0, FSW tab only (draft)","FSW-007 retired; other tabs still taken from v4.0"],
+      ["UNP CDR compiled feedback and the Spacecraft 2/3 CDR deck (Nov 2026)","reviewer findings listed below"]
+    ]
+  },
+  mass:{simpBase:3.89527, detBase:3.72508, limit:6.0, submittedMargin:0.5, payload:2.0, payloadMin:2.0},
+  power:{minBatt:41.63, maxBatt:46.08, minAtMin:588, socLimit:0.30, battLimit:80,
+         genWh:119.30, drawWh:105.54, windowMin:12, windowMax:13, windows:30, windowReq:15},
+  link:{
+    req:6,
+    s:{ptn0:55.25721, ebn0:4.5, rate:1000, plSubmitted:-16, best:21.64},
+    udl:{ptn0:56.38589, ebn0:9.6, rate:50, best:18.60},
+    ul:{ptn0:58.70459, ebn0:9.6, rate:50, best:21.51}
+  },
+  data:{
+    uhf:{rateKbps:12.5, passMin:8, passes:4, genWithMarginMB:0.513687},
+    s:{rateKbps:250, passMin:8.529, passes:3.571, genWithMarginMB:110.625533, collectMB:12.93312},
+    storage:{worstMB:685, bestMB:312, maxMB:4096, daysCovered:7, netBestMBperDay:47, netWorstMBperDay:101}
+  },
+  pointing:{
+    payload:{mech:1, adcs:1, thermal:0.064905, pos:0.000172},
+    sband:{mech:1, adcs:1, thermal:0.064905, pos:0.000085},
+    payloadLimit:36, trackLimit:2.0
+  },
+  rvm:[
+    ["System",{c:0,i:1,p:27}],["Payload",{c:0,i:1,p:3}],["Ground",{c:0,i:0,p:8}],
+    ["Structure",{c:14,i:6,p:8}],["Thermal",{c:1,i:0,p:3}],["EPS",{c:3,i:1,p:26}],
+    ["ADCS",{c:0,i:3,p:1}],["COMMs",{c:0,i:0,p:20}],["OBC",{c:3,i:1,p:6}],
+    ["FSW",{c:0,i:0,p:14}],["EGSE",{c:0,i:0,p:23}],["Operations",{c:1,i:1,p:8}]
+  ]
+};
+
+const DEFAULTS = {
+  massMargin:50, sPL:-16, sLinkRate:1000, uDlRate:50, uUlRate:50,
+  sDataRate:250, uDataRate:12.5, adcsErr:1.0, combine:"sum"
+};
+let S = {...DEFAULTS};
+
+/* ---------- Helpers ---------- */
+const f = (x,d=2)=>Number(x).toFixed(d);
+const log10 = Math.log10;
+const R = (ref,status)=>({ref,status});
+
+/* ---------- Evaluate every check from the current inputs ---------- */
+function evaluate(){
+  const out=[];
+  const add=(budget,c)=>{c.budget=budget; c.pass = c.kind==="max" ? c.value<=c.limit : c.value>=c.limit; out.push(c);};
+
+  /* MASS */
+  const m=1+S.massMargin/100;
+  const simp=D.mass.simpBase*m, det=D.mass.detBase*m;
+  add("Mass",{id:"M1",title:"Total mass with margin, simplified budget",value:simp,limit:D.mass.limit,unit:"kg",kind:"max",
+    cmp:"≤",dp:3,reqs:[R("UNP max mass","6 kg")],
+    where:"System Budgets v2.1 › Simplified Mass Budget E33",
+    note:`Base ${f(D.mass.simpBase,3)} kg plus ${S.massMargin}% margin. The submitted cell is labeled "Total + 5%" but computes ×1.5 (50%).`});
+  add("Mass",{id:"M2",title:"Total mass with margin, detailed budget",value:det,limit:D.mass.limit,unit:"kg",kind:"max",
+    cmp:"≤",dp:3,reqs:[R("UNP max mass","6 kg")],
+    where:"System Budgets v2.1 › Detailed Mass Budget E38",
+    note:`Base ${f(D.mass.detBase,3)} kg plus ${S.massMargin}% margin.`});
+  add("Mass",{id:"M3",title:"Payload mass allocation",value:D.mass.payload,limit:D.mass.payloadMin,unit:"kg",kind:"min",
+    cmp:"≥",dp:2,reqs:[R("SM-001","Complete")],
+    where:"System Budgets v2.1 › Simplified Mass Budget E23",
+    note:"Payload is exactly at the 2 kg allocation, so there is no margin on this line."});
+
+  /* POWER */
+  const soc=D.power.minBatt/D.power.maxBatt*100;
+  add("Power",{id:"P1",title:"Minimum battery state of charge over one day",value:soc,limit:D.power.socLimit*100,unit:"%",kind:"min",
+    cmp:"≥",dp:1,reqs:[R("OPS-010","Procedure written")],
+    where:"Power Budget v2.0 › Energy Balance STK V1.0",
+    note:`Low point is ${D.power.minBatt} Wh of ${D.power.maxBatt} Wh at minute ${D.power.minAtMin}. Limit is the 30% low-power safe-mode trigger.`});
+  add("Power",{id:"P2",title:"Battery capacity",value:D.power.maxBatt,limit:D.power.battLimit,unit:"Wh",kind:"max",
+    cmp:"≤",dp:2,reqs:[R("UNP12-62","Complete")],
+    where:"Power Budget v2.0 › Energy Balance STK V1.0",note:""});
+  add("Power",{id:"P3",title:"Daily energy generated vs consumed",value:D.power.genWh,limit:D.power.drawWh,unit:"Wh",kind:"min",
+    cmp:"≥",dp:1,reqs:[],
+    where:"Power Budget v2.0 › Energy Balance STK V1.0",
+    note:"Generation exceeds consumption by 13%. The battery still ends the modeled day 1.08 Wh below where it started."});
+  add("Power",{id:"P4",title:"Continuous data-collection window",value:D.power.windowMin,limit:D.power.windowReq,unit:"min",kind:"min",
+    cmp:"≥",dp:0,reqs:[R("SYS-006","Procedure written"),R("PAY-003","In progress"),R("EPS-002","Complete")],
+    where:"Power Budget v2.0 › Energy Balance STK V1.0",
+    note:`The STK profile contains ${D.power.windows} collection windows of ${D.power.windowMin} to ${D.power.windowMax} min. Requirements call for 15 min. Battery margin is large, so a 15 min run likely closes, but the budget does not show it.`});
+
+  /* LINK */
+  const L=D.link;
+  const sShift = S.sPL - L.s.plSubmitted;
+  const sM = L.s.ptn0 - 10*log10(S.sLinkRate*1000) - L.s.ebn0 + sShift;
+  const dM = L.udl.ptn0 - 10*log10(S.uDlRate*1000) - L.udl.ebn0;
+  const uM = L.ul.ptn0 - 10*log10(S.uUlRate*1000) - L.ul.ebn0;
+  const closeRate=(b,shift=0)=>Math.pow(10,(b.ptn0-b.ebn0-L.req+shift)/10)/1000;
+  add("Link",{id:"L1",title:"S-band downlink margin at 10° elevation",value:sM,limit:L.req,unit:"dB",kind:"min",cmp:"≥",dp:2,
+    reqs:[R("UNP12-90","Procedure written"),R("COMM-007","Procedure written")],
+    where:"System Budgets v2.1 › S-Band, Downlink - Worst Case",
+    note:`Zenith margin is +${L.s.best} dB. Assumes ${S.sLinkRate} kbps and ${S.sPL} dB satellite pointing loss. Closes 6 dB at ≤ ${f(closeRate(L.s,sShift),1)} kbps.`});
+  add("Link",{id:"L2",title:"UHF downlink margin at 10° elevation",value:dM,limit:L.req,unit:"dB",kind:"min",cmp:"≥",dp:2,
+    reqs:[R("UNP12-90","Procedure written"),R("COMM-006","Procedure written")],
+    where:"System Budgets v2.1 › UHF Link Budget, Downlink - Worst",
+    note:`Zenith margin is +${L.udl.best} dB. Assumes ${S.uDlRate} kbps. Closes 6 dB at ≤ ${f(closeRate(L.udl),1)} kbps.`});
+  add("Link",{id:"L3",title:"UHF uplink margin at 10° elevation",value:uM,limit:L.req,unit:"dB",kind:"min",cmp:"≥",dp:2,
+    reqs:[R("UNP12-90","Procedure written"),R("COMM-002","Procedure written")],
+    where:"System Budgets v2.1 › UHF Link Budget, Uplink - Worst",
+    note:`Zenith margin is +${L.ul.best} dB. Assumes ${S.uUlRate} kbps. Closes 6 dB at ≤ ${f(closeRate(L.ul),1)} kbps, below the 50 kbps uplink requirement.`});
+
+  /* DATA */
+  const dd=D.data;
+  const uPass = S.uDataRate*1000/8*dd.uhf.passMin*60/1e6;
+  const uDaily = uPass*dd.uhf.passes;
+  add("Data",{id:"D1",title:"UHF: one day of data vs daily downlink capacity",value:dd.uhf.genWithMarginMB,limit:uDaily,unit:"MB",kind:"max",cmp:"≤",dp:2,
+    reqs:[R("OBC-002","Complete"),R("FSW-012","Procedure written")],
+    where:"System Budgets v2.1 › Data Budget (UHF)",
+    note:`Capacity is ${f(uPass,2)} MB per pass over ${dd.uhf.passes} passes at ${S.uDataRate} kbps. Covers state-of-health data only.`});
+  const sPass = S.sDataRate*1000/8*dd.s.passMin*60/1e6;
+  const sDaily = sPass*dd.s.passes;
+  add("Data",{id:"D2",title:"S-band: one pass can carry one science collect",value:sPass,limit:dd.s.collectMB,unit:"MB",kind:"min",cmp:"≥",dp:2,
+    reqs:[R("COMM-001","Procedure written")],
+    where:"System Budgets v2.1 › Data Budget ( S - Band )",
+    note:`One collect is ${dd.s.collectMB} MB (two sensor heads). Capacity at ${S.sDataRate} kbps over an ${dd.s.passMin} min pass.`});
+  const passesNeeded=Math.ceil(dd.s.genWithMarginMB/sPass);
+  add("Data",{id:"D3",title:"S-band: one day of data vs daily downlink capacity",value:dd.s.genWithMarginMB,limit:sDaily,unit:"MB",kind:"max",cmp:"≤",dp:1,
+    reqs:[R("OBC-003","Procedure written"),R("FSW-012","Procedure written")],
+    where:"System Budgets v2.1 › Data Budget ( S - Band )",
+    note:`About ${f(dd.s.passes,1)} passes a day give ${f(sDaily,1)} MB. Clearing one day of data takes ${passesNeeded} passes (${f(passesNeeded/dd.s.passes,2)} days), so the backlog grows.`});
+  add("Data",{id:"D4",title:"Onboard storage peak over a 7-day contact window",value:dd.storage.worstMB,limit:dd.storage.maxMB,unit:"MB",kind:"max",cmp:"≤",dp:0,
+    reqs:[R("OBC-003","Procedure written")],
+    where:"System Budgets v2.1 › Storage over time",
+    note:`Worst case is attitude loss (nadir contacts only). Best case peaks at ${dd.storage.bestMB} MB. At the sheet's net growth rates the buffer fills in about ${Math.round(dd.storage.maxMB/dd.storage.netWorstMBperDay)} days (worst) to ${Math.round(dd.storage.maxMB/dd.storage.netBestMBperDay)} days (best) without data reduction.`});
+
+  /* POINTING */
+  const comb=(o)=>{
+    const e=[o.mech,S.adcsErr,o.thermal,o.pos];
+    return S.combine==="rss" ? Math.sqrt(e.reduce((a,b)=>a+b*b,0)) : e.reduce((a,b)=>a+b,0);
+  };
+  const how = S.combine==="rss" ? "Root-sum-square of" : "Linear sum of";
+  add("Pointing",{id:"G1",title:"Payload pointing error vs nadir requirement",value:comb(D.pointing.payload),limit:D.pointing.payloadLimit,unit:"°",kind:"max",cmp:"≤",dp:3,
+    reqs:[R("ADCS-001","In progress")],
+    where:"System Budgets v2.1 › Pointing Budget - Payload D10",
+    note:`${how} mechanical alignment (1°), ADCS (${S.adcsErr}°), thermal (0.065°) and position knowledge.`});
+  add("Pointing",{id:"G2",title:"Ground-station tracking error",value:comb(D.pointing.sband),limit:D.pointing.trackLimit,unit:"°",kind:"max",cmp:"≤",dp:3,
+    reqs:[R("ADCS-003","In progress")],
+    where:"System Budgets v2.1 › Pointing Budget - S-Band D10",
+    note:`${how} the same error terms. The sheet's note says the result is within 2°, but the linear sum is 2.065°. Root-sum-square gives 1.417°. D2S2 simulation is planned by end of Fall 2026.`});
+  return out;
+}
+
+/* ---------- Rendering ---------- */
+function barHtml(c){
+  const lo = Math.min(0,c.value)*1.15, hi = Math.max(c.value,c.limit)*1.25 || 1;
+  const pos = x=>Math.max(0,Math.min(100,(x-lo)/(hi-lo)*100));
+  const a=pos(0), b=pos(c.value), t=pos(c.limit);
+  const left=Math.min(a,b), width=Math.abs(b-a);
+  return `<div class="bar ${c.pass?"pass":"fail"}" aria-hidden="true">
+    ${lo<0?`<span class="zero" style="left:${a}%"></span>`:""}
+    <span class="fill" style="left:${left}%;width:${width}%"></span>
+    <span class="tick" style="left:${t}%"></span></div>`;
+}
+function checkHtml(c){
+  const margin = c.kind==="max" ? c.limit-c.value : c.value-c.limit;
+  const sign = margin>=0?"+":"−";
+  const reqs = c.reqs.map(r=>`<span class="rq"><b>${r.ref}</b> · ${r.status}</span>`).join("");
+  return `<div class="check ${c.pass?"pass":"fail"}" id="chk-${c.id}">
+    <div class="ch-top"><span class="chip ${c.pass?"pass":"fail"}">${c.pass?"✓ Pass":"✕ Fail"}</span>
+      <span class="ch-title">${c.title}</span></div>
+    <div class="vals"><b>${f(c.value,c.dp)} ${c.unit}</b> against ${c.cmp} ${f(c.limit,c.dp)} ${c.unit}
+      <span class="m">· margin ${sign}${f(Math.abs(margin),c.dp)} ${c.unit}</span></div>
+    ${barHtml(c)}
+    ${reqs?`<div class="reqs">${reqs}</div>`:""}
+    ${c.note?`<p class="note">${c.note}</p>`:""}
+    <div class="where">${c.where}<button type="button" class="trace-link" data-trace-check="${c.id}">Trace in Arcadia map</button></div></div>`;
+}
+const ORDER=["Mass","Power","Link","Data","Pointing"];
+const FULL={Mass:"Mass budget",Power:"Power budget",Link:"Link budget",Data:"Data and storage budget",Pointing:"Pointing budget"};
+let openState={};
+
+function renderCore(){
+  const checks=evaluate();
+  const total=checks.length, nPass=checks.filter(c=>c.pass).length, nFail=total-nPass;
+
+  document.getElementById("verdict").innerHTML =
+    `<span class="p">${nPass} of ${total}</span> budget checks pass. <span class="f">${nFail} fail.</span>`;
+
+  document.getElementById("ledger").innerHTML = ORDER.map(b=>{
+    const cs=checks.filter(c=>c.budget===b);
+    return `<div class="lrow" role="listitem"><span class="lab">${b}</span><span class="cells">${
+      cs.map(c=>`<button class="cell ${c.pass?"pass":"fail"}" data-go="${c.id}" data-b="${b}"
+        aria-label="${b} ${c.id}: ${c.title}, ${c.pass?"pass":"fail"}">${c.pass?"✓":"✕"}</button>`).join("")}</span></div>`;
+  }).join("");
+
+  const only=document.getElementById("onlyFail").checked;
+  document.getElementById("budgets").innerHTML = ORDER.map(b=>{
+    const all=checks.filter(c=>c.budget===b);
+    const shown=only?all.filter(c=>!c.pass):all;
+    if(!shown.length) return "";
+    const p=all.filter(c=>c.pass).length, fl=all.length-p;
+    const open = openState[b]!==undefined ? openState[b] : fl>0;
+    return `<details class="budget" data-b="${b}" ${open||only?"open":""}>
+      <summary><span class="chev"></span><span class="bn">${FULL[b]}</span>
+      <span class="bs"><b class="p">${p} pass</b>${fl?` · <b class="f">${fl} fail</b>`:""}</span></summary>
+      ${shown.map(checkHtml).join("")}</details>`;
+  }).join("") || `<p class="note">No failing checks with the current inputs.</p>`;
+
+  document.querySelectorAll("details.budget").forEach(d=>{
+    d.addEventListener("toggle",()=>{openState[d.dataset.b]=d.open;});
+  });
+  document.querySelectorAll(".cell").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const id=btn.dataset.go, b=btn.dataset.b;
+      TRACE={type:"check",id}; renderArc();
+      openState[b]=true;
+      const d=document.querySelector(`details.budget[data-b="${b}"]`);
+      if(d) d.open=true;
+      const el=document.getElementById("chk-"+id);
+      if(el){el.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"center"});}
+    });
+  });
+}
+
+/* ---------- Inputs ---------- */
+const FIELDS=[
+  ["massMargin","Mass margin (%)","Submitted: 50. The sheet label says 5.",1],
+  ["sPL","S-band satellite pointing loss at 10° (dB)","Submitted: −16. Pointing budget implies near 0.",0.5],
+  ["sLinkRate","S-band link bit rate (kbps)","Link budget uses 1000.",10],
+  ["uDlRate","UHF downlink bit rate (kbps)","Link budget uses 50.",1],
+  ["uUlRate","UHF uplink bit rate (kbps)","Link budget uses 50. Requirement COMM-002 is ≥ 50.",1],
+  ["sDataRate","S-band bit rate in data budget (kbps)","Data budget uses 250.",10],
+  ["uDataRate","UHF bit rate in data budget (kbps)","Data budget uses 12.5.",0.5],
+  ["adcsErr","ADCS pointing error term (°)","Submitted: 1.",0.1]
+];
+function buildInputs(){
+  const box=document.getElementById("inputs");
+  box.innerHTML = FIELDS.map(([k,l,h,st])=>`
+    <div class="fld"><label for="in-${k}">${l}</label>
+    <input id="in-${k}" type="number" inputmode="decimal" step="${st}" value="${S[k]}"><small>${h}</small></div>`).join("")+
+    `<div class="fld"><label for="in-combine">Pointing error combination</label>
+     <select id="in-combine"><option value="sum">Linear sum (submitted)</option><option value="rss">Root-sum-square</option></select></div>`;
+  FIELDS.forEach(([k])=>{
+    document.getElementById("in-"+k).addEventListener("input",e=>{
+      const v=parseFloat(e.target.value);
+      if(!isNaN(v) && v>=0 || (k==="sPL" && !isNaN(v))){S[k]=v;render();}
+    });
+  });
+  document.getElementById("in-combine").value=S.combine;
+  document.getElementById("in-combine").addEventListener("change",e=>{S.combine=e.target.value;render();});
+}
+document.getElementById("reset").addEventListener("click",()=>{S={...DEFAULTS};buildInputs();render();});
+document.getElementById("onlyFail").addEventListener("change",render);
+
+/* ---------- Flags ---------- */
+const FLAGS=[
+ ["Mass margin label does not match the formula",
+  "Both mass sheets label the line \"Total + 5%\" but the cell computes total × 1.5, a 50% margin. At a true 5% the simplified total would be 4.09 kg. The Capella script in the MBSE thesis used 15%. Pick the intended margin and relabel."],
+ ["Simplified and detailed mass sheets disagree",
+  "COM is 0.310 kg in the simplified sheet and 0.128 kg in the detailed one. OBC is 0.096 kg against 0.108 kg. Totals differ by 0.170 kg (3.895 vs 3.725 kg)."],
+ ["Capella model and CDR mass budget have drifted",
+  "The Capella result in the MS thesis (Sep 2025) totals 3.873 kg against 3.895 kg in the CDR sheet. The gap is in EPS (0.5826 vs 0.605 kg). Worth re-running the Python4Capella mass script on the current model."],
+ ["S-band worst-case pointing loss conflicts with the pointing budget",
+  "The worst-case link assumes −16 dB satellite pointing loss. The pointing budget shows about 2° error on a 92° beamwidth patch, which implies almost no loss. At 0 dB the S-band margin would be +6.76 dB and the check would pass. Reconcile the two once the D2S2 results are in."],
+ ["Link and data budgets assume different bit rates",
+  "S-band is 1 Mbps in the link budget and 250 kbps in the data budget. UHF is 50 kbps against 12.5 kbps. At the data-budget rates, S-band worst-case margin is −3.2 dB (still fails) and UHF downlink is +5.8 dB (0.2 dB short)."],
+ ["UNP12-90 and COMM-002 cannot both be met as designed",
+  "With current assumptions the UHF uplink closes 6 dB at 10° elevation only at about 20 kbps or less, while COMM-002 asks for at least 50 kbps. A design change (power, ground antenna gain) or a requirement change is needed."],
+ ["COMM-001 units look wrong",
+  "The requirement says 13 Mb of science data per orbit. One S-band collect in the data budget is 12.93 MB (about 103 Mb). It probably should read 13 MB."],
+ ["Modeled collection windows are shorter than the 15 minute requirement",
+  "The STK energy balance uses 12 to 13 minute windows. EPS-002 is marked Complete in the RVM and SYS-006 and PAY-003 call for 15 minutes. Re-run the power profile at 15 minutes."],
+ ["S-band backlog grows every day",
+  "The sheet's own note says daily generation (about 105 MB) exceeds downlink in both cases. Storage stays within 4 GB for the 7-day window, but a sustained campaign needs data reduction (FSW-012) or more passes."],
+ ["Thermal range may not match component limits",
+  "The pointing sheet uses −14 °C to +34 °C from the Thermal Analysis v3.0. RVM operating limits include 0 to 45 °C for the battery pack, −10 to 50 °C for the neutron detector and −10 to 60 °C for the reaction wheels. I did not read the thermal document, so check which node that range describes."]
+];
+document.getElementById("flags").innerHTML = FLAGS.map(([t,b])=>
+  `<details class="flag"><summary><span class="chev"></span><span class="ft">${t}</span></summary><div class="fb">${b}</div></details>`).join("");
+
+/* ---------- Reviewer findings (UNP CDR feedback, Nov 2026) ---------- */
+const REVIEW = [
+ ["Link budget (UNP12-90): open",
+  "Reviewers report the UHF downlink is about 5 dB short after their corrections, and the uplink also fails. Corrections to apply: antenna gain in dBiC, 5th-percentile gain or maximum gain minus about 5 dB, ground pointing loss of 1 dB or less, axial ratio of at least 0.3 dB, itemized coax loss, a stated modulation and BER for Eb/N0, implementation loss of at least 1 dB, and a trade on a ground antenna of about 20 dBiC. Use 10° elevation worst case with 95% coverage, or maximum gain with typical maximum pointing loss, without double counting. A 90° best case is not acceptance evidence. The revised workbook has not been supplied."],
+ ["Mass budget: open",
+  "Reviewers recommend at least 10% contingency (25% for items still TBD), contingency set part by part, a not-to-exceed payload mass, and a single mass budget instead of two. The 'Total + 5%' line is really a 50% factor, so fix the label or the number. Structural analysis notes 3.7 kg and 5.6 kg figures that should be reconciled with the budget."],
+ ["Pointing budget (ADCS-003): open",
+  "No control error is included, and by the sheet's own numbers the 2° tracking requirement is not met. ShipSat references remain in the sheet."],
+ ["Power budget: open",
+  "Add about 10% contingency, set receive to 100% duty, state the undervoltage cutoff, and make sure the battery never reaches 0 Wh."],
+ ["Requirement changes decided at CDR",
+  "COMM-004 verification method changes to Test. FSW-007 is retired in the v5.0 FSW tab draft. The full RVM v5.0 was not found in the Drive folder, so v4.0 stays the baseline for the other tabs."]
+];
+document.getElementById("review").innerHTML = REVIEW.map(([t,b])=>
+  `<details class="flag"><summary><span class="chev"></span><span class="ft">${t}</span></summary><div class="fb">${b}</div></details>`).join("");
+
+/* ---------- RVM ---------- */
+(function(){
+  const max=Math.max(...D.rvm.map(([,v])=>v.c+v.i+v.p));
+  let tc=0,ti=0,tp=0;
+  document.getElementById("rvm").innerHTML = D.rvm.map(([n,v])=>{
+    tc+=v.c;ti+=v.i;tp+=v.p;const t=v.c+v.i+v.p;
+    return `<div class="rv"><span class="rl">${n}</span>
+      <span class="rb" role="img" aria-label="${n}: ${v.c} complete, ${v.i} in progress, ${v.p} procedure written">
+      <i style="width:${v.c/max*100}%;background:var(--pass)"></i>
+      <i style="width:${v.i/max*100}%;background:var(--accent)"></i>
+      <i style="width:${v.p/max*100}%;background:var(--proc)"></i></span>
+      <span class="rn">${t}</span></div>`;
+  }).join("") + `<p class="note" style="margin-top:10px">${tc} of ${tc+ti+tp} requirements are Complete, ${ti} are in progress and ${tp} have a written procedure. Most closure happens at test, after CDR.</p>`;
+})();
+
+/* ---------- Header and footer ---------- */
+document.getElementById("sub").textContent =
+  "Pass and fail from the CDR budgets, traced to requirement verification status. Snapshot pulled "+D.meta.pulled+".";
+document.getElementById("foot").innerHTML =
+  `<p><b>Sources</b></p><ul>${D.meta.files.map(([n,d])=>`<li>${n}: ${d}</li>`).join("")}</ul>
+   <p style="margin-top:10px">Pass and fail use the limits stated in the sheets and the RVM: 6 kg mass limit, 6 dB link margin at 10° elevation (UNP12-90), 30% battery safe-mode trigger (OPS-010), 80 Wh battery (UNP12-62), 36° nadir pointing (ADCS-001) and 2° tracking (ADCS-003). Inputs above are what-if values and do not change the source files.</p>
+   <p>The Arcadia layers (v1.1) follow the phase-to-layer mapping in the SmallSat 2025 MBSE methodology poster: Pre-Phase A to operational analysis, Phase A to system analysis, Phase B to logical architecture, Phase C to physical architecture. Their contents are a draft until a Capella export is loaded.</p>
+   <p>Not yet included: the thermal and structural analysis documents, test procedures, and the Capella model itself.</p>`;
+
+/* ---------- Arcadia model: draft layers, replaceable by a Capella export ---------- */
+/* Links point one layer up: sa.oa, la.sa, pa.la. Evidence maps a budget check id to the physical items it constrains. */
+const ARC_DEFAULT = {
+  source:"Draft layers built from the MBSE thesis, the RVM and the CDR budgets. They are not read from the Capella model.",
+  oa:[
+    {id:"OA1",name:"Measure neutron flux versus location"},
+    {id:"OA2",name:"Measure neutron flux around solar events"},
+    {id:"OA3",name:"Deliver a flight-ready CubeSat within UNP constraints"}
+  ],
+  sa:[
+    {id:"SA1",name:"Collect science data in 15 min windows",reqs:["SYS-006","PAY-003","EPS-002"],oa:["OA1","OA2"]},
+    {id:"SA2",name:"Deliver stored science data to ground",reqs:["COMM-001","OBC-003","FSW-012"],oa:["OA1","OA2"]},
+    {id:"SA3",name:"Close links with ground at 10° elevation",reqs:["UNP12-90","COMM-002","COMM-006","COMM-007"],oa:["OA2","OA3"]},
+    {id:"SA4",name:"Stay power-positive and safe",reqs:["OPS-010","UNP12-62"],oa:["OA3"]},
+    {id:"SA5",name:"Point the payload at nadir and track the ground station",reqs:["ADCS-001","ADCS-003"],oa:["OA1"]},
+    {id:"SA6",name:"Fit the 6 kg launch limit",reqs:["UNP max mass","SM-001"],oa:["OA3"]}
+  ],
+  la:[
+    {id:"LF1",name:"Collect neutron data",sa:["SA1"]},
+    {id:"LF2",name:"Store and process data",sa:["SA2"]},
+    {id:"LF3",name:"Downlink science data",sa:["SA2","SA3"]},
+    {id:"LF4",name:"Downlink telemetry",sa:["SA3"]},
+    {id:"LF5",name:"Receive commands",sa:["SA3"]},
+    {id:"LF6",name:"Generate and store power",sa:["SA1","SA4"]},
+    {id:"LF7",name:"Control attitude",sa:["SA5"]},
+    {id:"LF8",name:"Carry the payload within launch mass",sa:["SA6"]}
+  ],
+  pa:[
+    {id:"PA1",name:"Structure and integration",la:["LF8"]},
+    {id:"PA2",name:"Neutron detector payload",la:["LF1"]},
+    {id:"PA3",name:"EPS and battery",la:["LF6"]},
+    {id:"PA4",name:"UHF radio and antenna",la:["LF4","LF5"]},
+    {id:"PA5",name:"S-band radio and antenna",la:["LF3"]},
+    {id:"PA6",name:"OBC and data storage",la:["LF2"]},
+    {id:"PA7",name:"ADCS",la:["LF7"]}
+  ],
+  evidence:{
+    M1:["PA1"],M2:["PA1"],M3:["PA2"],
+    P1:["PA3"],P2:["PA3"],P3:["PA3"],P4:["PA3","PA2"],
+    L1:["PA5"],L2:["PA4"],L3:["PA4"],
+    D1:["PA4","PA6"],D2:["PA5","PA6"],D3:["PA5","PA6"],D4:["PA6"],
+    G1:["PA7","PA2"],G2:["PA7","PA5"]
+  }
+};
+let ARC = JSON.parse(JSON.stringify(ARC_DEFAULT));
+let TRACE = null;
+const LAYERS=[["oa","Operational analysis","Pre-Phase A"],["sa","System analysis","Phase A"],["la","Logical architecture","Phase B"],["pa","Physical architecture","Phase C"]];
+const PARENT={sa:"oa",la:"sa",pa:"la"};
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const reduceMotion=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function arcIndex(){const m={};LAYERS.forEach(([k])=>(ARC[k]||[]).forEach(n=>{m[n.id]=Object.assign({},n,{layer:k});}));return m;}
+function parentsOf(n,idx){const pk=PARENT[n.layer];if(!pk)return[];return(n[pk]||[]).filter(x=>idx[x]&&idx[x].layer===pk);}
+function childrenMap(idx){const ch={};Object.values(idx).forEach(n=>parentsOf(n,idx).forEach(p=>{(ch[p]=ch[p]||[]).push(n.id);}));return ch;}
+function ancestors(id,idx,acc){acc=acc||new Set();if(acc.has(id))return acc;acc.add(id);parentsOf(idx[id],idx).forEach(p=>ancestors(p,idx,acc));return acc;}
+function descendants(id,ch,acc){acc=acc||new Set();if(acc.has(id))return acc;acc.add(id);(ch[id]||[]).forEach(c=>descendants(c,ch,acc));return acc;}
+
+function arcEvidence(checks,idx){
+  const ev={};Object.keys(idx).forEach(id=>{ev[id]=new Set();});
+  const byId={};checks.forEach(c=>{byId[c.id]=c;});
+  Object.entries(ARC.evidence||{}).forEach(([cid,pas])=>{
+    if(!byId[cid])return;
+    pas.forEach(p=>{if(!idx[p])return;ancestors(p,idx).forEach(a=>ev[a].add(cid));});
+  });
+  return{ev,byId};
+}
+function traceSet(idx,ch){
+  if(!TRACE)return null;
+  const nodes=new Set(),chk=new Set();
+  if(TRACE.type==="check"){
+    (ARC.evidence[TRACE.id]||[]).forEach(p=>{if(idx[p])ancestors(p,idx,nodes);});
+    chk.add(TRACE.id);
+  }else if(idx[TRACE.id]){
+    ancestors(TRACE.id,idx).forEach(x=>nodes.add(x));
+    descendants(TRACE.id,ch).forEach(x=>nodes.add(x));
+    Object.entries(ARC.evidence||{}).forEach(([cid,pas])=>{
+      if(pas.some(p=>idx[p]&&idx[p].layer==="pa"&&nodes.has(p)))chk.add(cid);
+    });
+  }else return null;
+  return{nodes,checks:chk};
+}
+
+function renderArc(){
+  const checks=evaluate(),idx=arcIndex(),ch=childrenMap(idx);
+  const{ev,byId}=arcEvidence(checks,idx);
+  const T=traceSet(idx,ch);
+  if(TRACE&&!T)TRACE=null;
+  document.getElementById("arcnote").textContent=ARC.source+" Pick a card to trace it up to the mission objectives and down to the budget checks that support it.";
+
+  document.getElementById("tracebar").innerHTML=T?(()=>{
+    const lab=TRACE.type==="check"
+      ?`Check ${TRACE.id}: ${(byId[TRACE.id]||{}).title||""}`
+      :`${TRACE.id}: ${idx[TRACE.id].name}`;
+    const cl=[...T.checks].filter(c=>byId[c]).map(c=>`<b style="color:var(--${byId[c].pass?"pass":"fail"})">${esc(c)} ${byId[c].pass?"✓":"✕"}</b>`).join(" · ");
+    return`<div class="tracebar"><span>Tracing <b>${esc(lab)}</b></span>${cl?`<span>Checks: ${cl}</span>`:""}<button class="btn" id="traceclear" type="button">Clear trace</button></div>`;
+  })():"";
+
+  document.getElementById("arcmap").innerHTML=LAYERS.map(([k,label,ph])=>{
+    const nodes=ARC[k]||[];
+    const nRisk=nodes.filter(n=>[...ev[n.id]].some(c=>byId[c]&&!byId[c].pass)).length;
+    const cards=nodes.map(n=>{
+      const ids=[...ev[n.id]].filter(c=>byId[c]);
+      const fails=ids.filter(c=>!byId[c].pass);
+      const st=!ids.length?"none":(fails.length?"fail":"pass");
+      const low=(k==="pa"||k==="la");
+      const chip=st==="fail"?(low?"✕ Failing":"✕ At risk"):st==="pass"?"✓ Supported":"No evidence";
+      let meta="";
+      if(k==="pa"){
+        meta=ids.length?ids.map(c=>`<b class="${byId[c].pass?"p":"f"}">${esc(c)} ${byId[c].pass?"✓":"✕"}</b>`).join(" · "):"No budget check linked";
+      }else{
+        const parts=[];
+        if(k==="sa"&&n.reqs&&n.reqs.length)parts.push(esc(n.reqs.join(", ")));
+        if(ids.length)parts.push(`${fails.length} of ${ids.length} checks fail`);
+        meta=parts.join(" · ");
+      }
+      const on=T?(T.nodes.has(n.id)?"hl":"dim"):"";
+      const pressed=TRACE&&TRACE.type==="node"&&TRACE.id===n.id;
+      return`<button type="button" class="an ${st==="none"?"":st} ${on}" data-trace-node="${esc(n.id)}" aria-pressed="${pressed}">
+        <span class="an-top"><span class="chip ${st==="none"?"none":st}">${chip}</span><span class="an-id">${esc(n.id)}</span></span>
+        <span class="an-name">${esc(n.name)}</span>${meta?`<span class="an-meta">${meta}</span>`:""}</button>`;
+    }).join("");
+    return`<section class="alayer" aria-label="${label}"><h3>${label} <span class="ph">· ${ph} · ${nodes.length} items${nRisk?` · ${nRisk} at risk`:""}</span></h3><div class="nodes">${cards}</div></section>`;
+  }).join("");
+}
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-trace-node],[data-trace-check],#traceclear");
+  if(!t)return;
+  if(t.id==="traceclear"){TRACE=null;renderArc();return;}
+  if(t.dataset.traceNode){
+    TRACE=(TRACE&&TRACE.type==="node"&&TRACE.id===t.dataset.traceNode)?null:{type:"node",id:t.dataset.traceNode};
+    renderArc();return;
+  }
+  if(t.dataset.traceCheck){
+    TRACE={type:"check",id:t.dataset.traceCheck};renderArc();
+    document.getElementById("arc").scrollIntoView({behavior:reduceMotion()?"auto":"smooth",block:"start"});
+  }
+});
+
+/* ---------- Capella export: load, validate, template ---------- */
+function saveText(name,text,type){
+  try{
+    const u=URL.createObjectURL(new Blob([text],{type}));
+    const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),1000);return true;
+  }catch(err){return false;}
+}
+function setMsg(id,text,kind){const el=document.getElementById(id);el.textContent=text;el.className="msg"+(kind?" "+kind:"");}
+function validateArc(o){
+  if(!o||typeof o!=="object"||Array.isArray(o))return{err:"The file is not a JSON object."};
+  const seen=new Set(),ids={};
+  for(const[k,label]of LAYERS){
+    if(!Array.isArray(o[k]))return{err:`Missing array "${k}" for ${label}.`};
+    ids[k]=new Set();
+    for(const n of o[k]){
+      if(!n||typeof n.id!=="string"||typeof n.name!=="string")return{err:`Every item in "${k}" needs a string id and a string name.`};
+      if(seen.has(n.id))return{err:`Duplicate id ${n.id}.`};
+      seen.add(n.id);ids[k].add(n.id);
+    }
+  }
+  let dropped=0;
+  const out={source:typeof o.source==="string"&&o.source?o.source:"Loaded from a Capella export.",oa:[],sa:[],la:[],pa:[],evidence:{}};
+  LAYERS.forEach(([k])=>{
+    out[k]=o[k].map(n=>{
+      const c={id:n.id,name:n.name};
+      if(Array.isArray(n.reqs))c.reqs=n.reqs.map(String);
+      const pk=PARENT[k];
+      if(pk){const l=Array.isArray(n[pk])?n[pk]:[];c[pk]=l.filter(x=>{const ok=ids[pk].has(x);if(!ok)dropped++;return ok;});}
+      return c;
+    });
+  });
+  const known=new Set(evaluate().map(c=>c.id)),unknown=[];
+  const src=(o.evidence&&typeof o.evidence==="object")?o.evidence:ARC_DEFAULT.evidence;
+  Object.entries(src).forEach(([cid,pas])=>{
+    if(!known.has(cid)){unknown.push(cid);return;}
+    const l=(Array.isArray(pas)?pas:[]).filter(p=>ids.pa.has(p));
+    if(l.length)out.evidence[cid]=l;else dropped++;
+  });
+  const unlinked=[...known].filter(c=>!out.evidence[c]);
+  return{model:out,dropped,unknown,unlinked,defaultEvidence:!o.evidence};
+}
+document.getElementById("arcfile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    let o;try{o=JSON.parse(r.result);}catch(err){setMsg("arcmsg","That file is not valid JSON: "+err.message,"err");return;}
+    const v=validateArc(o);
+    if(v.err){setMsg("arcmsg",v.err,"err");return;}
+    ARC=v.model;TRACE=null;
+    const w=[];
+    if(v.defaultEvidence)w.push("No evidence object found, so the draft check links were reused where the physical ids match.");
+    if(v.dropped)w.push(v.dropped+" link(s) pointed at ids that do not exist and were dropped.");
+    if(v.unknown.length)w.push("Unknown check ids ignored: "+v.unknown.join(", ")+".");
+    if(v.unlinked.length)w.push("Checks with no physical item: "+v.unlinked.join(", ")+".");
+    setMsg("arcmsg",`Loaded ${ARC.pa.length} physical items, ${ARC.la.length} functions, ${ARC.sa.length} system items and ${ARC.oa.length} operational items. `+w.join(" "),w.length?"":"ok");
+    render();
+  };
+  r.onerror=()=>setMsg("arcmsg","Could not read that file.","err");
+  r.readAsText(f);e.target.value="";
+});
+document.getElementById("arctemplate").addEventListener("click",()=>{
+  const ok=saveText("n2-arcadia-model.json",JSON.stringify(ARC,null,2),"application/json");
+  setMsg("arcmsg",ok?"Template downloaded. It holds the layers currently shown.":"The browser blocked the download here. Open the page in a full browser tab and try again.",ok?"ok":"err");
+});
+document.getElementById("arcreset").addEventListener("click",()=>{
+  ARC=JSON.parse(JSON.stringify(ARC_DEFAULT));TRACE=null;setMsg("arcmsg","Draft layers restored.","ok");render();
+});
+
+/* ---------- SysML v2 export ---------- */
+const sid=s=>{const t=String(s).replace(/[^A-Za-z0-9]+/g,"_").replace(/^_+|_+$/g,"");return/^[A-Za-z_]/.test(t)?t:"_"+t;};
+const sdoc=s=>String(s).replace(/\*\//g,"* /").replace(/\s+/g," ");
+const snum=x=>String(Number(Number(x).toFixed(4)));
+function buildSysml(){
+  const checks=evaluate(),idx=arcIndex();
+  const L=[],p=(s)=>L.push(s===undefined?"":s);
+  const PK={oa:"OperationalAnalysis",sa:"SystemAnalysis",la:"LogicalArchitecture",pa:"PhysicalArchitecture"};
+  const DEF={oa:"use case def",sa:"requirement def",la:"action def",pa:"part def"};
+  const nm=n=>sid(n.id+"_"+n.name).slice(0,64);
+  p("// N2 CDR verification dashboard: SysML v2 export (draft)");
+  p("// Generated "+new Date().toISOString().slice(0,10)+" from the dashboard's current check values, including any what-if inputs.");
+  p("// Checked with the OpenSysML validator (strict mode) on 23 Nov 2026.");
+  p("// Arcadia layers: "+sdoc(ARC.source));
+  p();
+  p("package N2_Model {");
+  p("    private import ScalarValues::*;");
+  p();
+  LAYERS.forEach(([k,label,ph])=>{
+    p(`    package ${PK[k]} { // ${label}, ${ph}`);
+    (ARC[k]||[]).forEach(n=>{
+      if(k==="sa"&&n.reqs&&n.reqs.length){
+        p(`        requirement def ${nm(n)} { // ${sdoc(n.name)}`);
+        p(`            doc /* Source requirements: ${sdoc(n.reqs.join(", "))} */`);
+        p("        }");
+      }else p(`        ${DEF[k]} ${nm(n)}; // ${sdoc(n.name)}`);
+    });
+    p("    }");p();
+  });
+  p("    package System {");
+  p("        private import PhysicalArchitecture::*;");
+  p("        part def Neutron2 {");
+  (ARC.pa||[]).forEach(n=>p(`            part ${sid(n.id).toLowerCase()} : ${nm(n)};`));
+  p("        }");
+  p("    }");p();
+  p("    package BudgetRequirements {");
+  [["MaxLimitReq","<="],["MinLimitReq",">="]].forEach(([n,op])=>{
+    p(`        requirement def ${n} {`);
+    p("            attribute limit : Real;");
+    p("            attribute computed : Real;");
+    p("            attribute unit : String;");
+    p(`            require constraint { computed ${op} limit }`);
+    p("        }");
+  });
+  checks.forEach(c=>{
+    const margin=c.kind==="max"?c.limit-c.value:c.value-c.limit;
+    p();
+    p(`        requirement C_${sid(c.id)} : ${c.kind==="max"?"MaxLimitReq":"MinLimitReq"} {`);
+    p(`            doc /* ${sdoc(c.title)}. Source: ${sdoc(c.where)} */`);
+    p(`            attribute :>> limit = ${snum(c.limit)};`);
+    p(`            attribute :>> computed = ${snum(c.value)};`);
+    p(`            attribute :>> unit = "${String(c.unit).replace(/"/g,"'")}";`);
+    p(`            // RESULT: ${c.pass?"PASS":"FAIL"}, margin ${margin>=0?"+":"-"}${snum(Math.abs(margin))} ${c.unit}`);
+    if(c.reqs&&c.reqs.length)p(`            // RVM: ${sdoc(c.reqs.map(r=>r.ref+" ("+r.status+")").join(", "))}`);
+    p("        }");
+  });
+  p("    }");p();
+  p("    package Verification {");
+  p("        private import BudgetRequirements::*;");
+  checks.forEach(c=>{
+    p(`        verification V_${sid(c.id)} { // analysis, ${c.pass?"pass":"fail"}`);
+    p(`            objective { verify C_${sid(c.id)}; }`);
+    p("        }");
+  });
+  p("    }");p();
+  p("    package Trace {");
+  p("        // Budget check satisfied by physical item");
+  checks.forEach(c=>{(ARC.evidence[c.id]||[]).forEach(pa=>{
+    if(idx[pa])p(`        satisfy BudgetRequirements::C_${sid(c.id)} by System::Neutron2::${sid(pa).toLowerCase()};`);
+  });});
+  p("        // Layer-to-layer traceability, child to parent");
+  Object.values(idx).forEach(n=>{parentsOf(n,idx).forEach(q=>{
+    p(`        dependency ${sid("dep_"+n.id+"_"+q)} from ${PK[n.layer]}::${nm(n)} to ${PK[idx[q].layer]}::${nm(idx[q])};`);
+  });});
+  p("    }");
+  p("}");
+  return L.join("\n");
+}
+function renderSysml(){
+  const t=buildSysml();
+  document.getElementById("sysmlout").textContent=t;
+  document.getElementById("sysmlsize").textContent="("+t.split("\n").length+" lines)";
+}
+document.getElementById("sysmlcopy").addEventListener("click",async()=>{
+  const t=document.getElementById("sysmlout").textContent;
+  try{await navigator.clipboard.writeText(t);setMsg("sysmlmsg","Copied.","ok");}
+  catch(err){
+    const r=document.createRange();r.selectNodeContents(document.getElementById("sysmlout"));
+    const s=getSelection();s.removeAllRanges();s.addRange(r);
+    setMsg("sysmlmsg","The browser blocked clipboard access. The text is selected, so press Ctrl+C or Cmd+C.","err");
+  }
+});
+document.getElementById("sysmldl").addEventListener("click",()=>{
+  const ok=saveText("N2_CDR_model.sysml",document.getElementById("sysmlout").textContent,"text/plain");
+  setMsg("sysmlmsg",ok?"Downloaded N2_CDR_model.sysml.":"The browser blocked the download here. Use Copy, or open the page in a full browser tab.",ok?"ok":"err");
+});
+
+function render(){renderCore();renderArc();renderSysml();}
+buildInputs();
+render();
+</script>
+</body>
+</html>
