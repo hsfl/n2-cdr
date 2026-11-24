@@ -6,8 +6,8 @@ Current version: v1.2 (snapshot pulled 23 Nov 2026). The budget workbooks and RV
 
 ## What the page shows
 
-- **Verdict and ledger.** A headline count of passing and failing checks, and a ledger of 16 checks grouped by budget:
-  - Mass (M1–M3): 6 kg limit.
+- **Verdict and ledger.** A headline count of passing and failing checks, and a ledger of 15 checks grouped by budget:
+  - Mass (M1, M3): 6 kg limit, from the Simplified Mass Budget only, and the 2 kg payload allocation.
   - Power (P1–P4): 80 Wh battery (UNP12-62), 30% safe-mode trigger (OPS-010), 15-minute collection window.
   - Link (L1–L3): 6 dB margin at 10° elevation (UNP12-90).
   - Data (D1–D4): downlink volume and 4 GB storage.
@@ -21,7 +21,8 @@ Current version: v1.2 (snapshot pulled 23 Nov 2026). The budget workbooks and RV
 
 ## Data sources
 
-- N2.PM.System Budgets v2.1 (mass, link, data, storage, pointing)
+- N2.PM.System Budgets v3.0 (SOURCE), Simplified Mass Budget only
+- N2.PM.System Budgets v2.1 (link, data, storage, pointing)
 - N2.PM.Power Budget v2.0 (STK-based energy balance)
 - N2.PM.Requirements Verification Matrix v4.0, plus the FSW tab of the v5.0 draft
 - UNP CDR compiled feedback and the Spacecraft 2/3 CDR deck

@@ -222,7 +222,8 @@ const D = {
   meta:{
     pulled:"12 Nov 2026, re-checked 23 Nov 2026. The budget workbooks and RVM v4.0 are unchanged since 18 Sep 2026",
     files:[
-      ["N2.PM.System Budgets v2.1.xlsx","mass, link, data, storage and pointing budgets (modified 18 Sep 2026)"],
+      ["N2.PM.System Budgets v3.0 (SOURCE).xlsx","Simplified Mass Budget only (mass checks)"],
+      ["N2.PM.System Budgets v2.1.xlsx","link, data, storage and pointing budgets (modified 18 Sep 2026)"],
       ["N2.PM.Power Budget v2.0.xlsx","STK-based energy balance (modified 18 Sep 2026)"],
       ["N2.PM.Requirements Verification Matrix v4.0.xlsx","requirement status and verification method (released 16 Sep 2026)"],
       ["RVM v5.0, FSW tab only (draft)","FSW-007 retired; other tabs still taken from v4.0"],
@@ -274,18 +275,14 @@ function evaluate(){
 
   /* MASS */
   const m=1+S.massMargin/100;
-  const simp=D.mass.simpBase*m, det=D.mass.detBase*m;
+  const simp=D.mass.simpBase*m;
   add("Mass",{id:"M1",title:"Total mass with margin, simplified budget",value:simp,limit:D.mass.limit,unit:"kg",kind:"max",
     cmp:"≤",dp:3,reqs:[R("UNP max mass","6 kg")],
-    where:"System Budgets v2.1 › Simplified Mass Budget E33",
+    where:"System Budgets v3.0 › Simplified Mass Budget E33",
     note:`Base ${f(D.mass.simpBase,3)} kg plus ${S.massMargin}% margin. The submitted cell is labeled "Total + 5%" but computes ×1.5 (50%).`});
-  add("Mass",{id:"M2",title:"Total mass with margin, detailed budget",value:det,limit:D.mass.limit,unit:"kg",kind:"max",
-    cmp:"≤",dp:3,reqs:[R("UNP max mass","6 kg")],
-    where:"System Budgets v2.1 › Detailed Mass Budget E38",
-    note:`Base ${f(D.mass.detBase,3)} kg plus ${S.massMargin}% margin.`});
   add("Mass",{id:"M3",title:"Payload mass allocation",value:D.mass.payload,limit:D.mass.payloadMin,unit:"kg",kind:"min",
     cmp:"≥",dp:2,reqs:[R("SM-001","Complete")],
-    where:"System Budgets v2.1 › Simplified Mass Budget E23",
+    where:"System Budgets v3.0 › Simplified Mass Budget E23",
     note:"Payload is exactly at the 2 kg allocation, so there is no margin on this line."});
 
   /* POWER */
@@ -473,8 +470,8 @@ document.getElementById("onlyFail").addEventListener("change",render);
 const FLAGS=[
  ["Mass margin label does not match the formula",
   "Both mass sheets label the line \"Total + 5%\" but the cell computes total × 1.5, a 50% margin. At a true 5% the simplified total would be 4.09 kg. The Capella script in the MBSE thesis used 15%. Pick the intended margin and relabel."],
- ["Simplified and detailed mass sheets disagree",
-  "COM is 0.310 kg in the simplified sheet and 0.128 kg in the detailed one. OBC is 0.096 kg against 0.108 kg. Totals differ by 0.170 kg (3.895 vs 3.725 kg)."],
+ ["Mass checks use the simplified budget only",
+  "As directed, the mass checks use the Simplified Mass Budget in System Budgets v3.0 (3.895 kg). The Detailed Mass Budget in the same file totals 3.725 kg, with COM at 0.128 kg against 0.310 kg and OBC at 0.108 kg against 0.096 kg. It is no longer checked here. Reviewers also asked for a single mass budget, so the two sheets still need to be reconciled."],
  ["Capella model and CDR mass budget have drifted",
   "The Capella result in the MS thesis (Sep 2025) totals 3.873 kg against 3.895 kg in the CDR sheet. The gap is in EPS (0.5826 vs 0.605 kg). Worth re-running the Python4Capella mass script on the current model."],
  ["S-band worst-case pointing loss conflicts with the pointing budget",
@@ -572,7 +569,7 @@ const ARC_DEFAULT = {
     {id:"PA7",name:"ADCS",la:["LF7"]}
   ],
   evidence:{
-    M1:["PA1"],M2:["PA1"],M3:["PA2"],
+    M1:["PA1"],M3:["PA2"],
     P1:["PA3"],P2:["PA3"],P3:["PA3"],P4:["PA3","PA2"],
     L1:["PA5"],L2:["PA4"],L3:["PA4"],
     D1:["PA4","PA6"],D2:["PA5","PA6"],D3:["PA5","PA6"],D4:["PA6"],
